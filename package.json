@@ -1,0 +1,22 @@
+{
+  "name": "cordova-plugin-google-play-games",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Cordova plugin to work with Google Play Games services",
+  "main": "./www/googleplaygames.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maximnara/cordova-plugin-google-play-games.git"
+  },
+  "keywords": [
+    "cordova",
+    "ecosystem:cordova",
+    "cordova-android"
+  ],
+  "author": "Maksim Luzhkov",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/maximnara/cordova-plugin-google-play-games/issues"
+  },
+  "homepage": "https://github.com/maximnara/cordova-plugin-google-play-games"
+}
