@@ -1,5 +1,12 @@
 # MyTarget Ads for Cordova apps
 
+### Google Play Games services for Ionic and Cordova apps.
+You can login, make game saves, have leaderboard and achievements.
+## Demos:
+- [Leaderboard Demo Video](https://drive.google.com/file/d/1F-UGff5QaxCH72_c7DEqMqIWonb221g-/view?usp=sharing)
+- [Achievements Demo Video](https://drive.google.com/file/d/1Ey5ZkDWz-bduMlXoPr5NgKCwxy9VnVaK/view?usp=sharing)
+- [Game Saves Demo Video](https://drive.google.com/file/d/1F0YhgkF81IvN3d_N2-ezjhxEJN8xy34X/view?usp=sharing)
+
 --------
 
 ## Table of Contents
