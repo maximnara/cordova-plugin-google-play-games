@@ -164,6 +164,39 @@ let GooglePlayGames = (function ()
                 callPlugin('loadGameSave', [params.snapshotName], resolve, reject);
             });
         },
+
+        /**
+         * Get friends list
+         * There is two cases: when no permission needed from user, and permission will be asked.
+         *
+         * — First case: this function promise will return Array of friends.
+         * — Second case:
+         * After call for some cases event "friendsListRequestSuccessful" can be thrown. This method promise will be rejected
+         * with error code 1. Error code 1 - user error that shows that after it event will be fired, code 2 mean that nothing
+         * will happen after this error.
+         * When "friendsListRequestSuccessful" event is fired, you should call this function again by yourself.
+         */
+        getFriendsList: function getFriendsList()
+        {
+            return new Promise((resolve, reject) => {
+                callPlugin('getFriendsList', [], resolve, reject);
+            });
+        },
+
+        /**
+         * Show another player profile
+         * @param {String} params.id - Another player profile id
+         */
+        showAnotherPlayersProfile: function loadGameSave(params)
+        {
+            params = defaults(params, {});
+            if (params.hasOwnProperty('id') === false) {
+                throw new Error('You should specify another player id parameter');
+            }
+            return new Promise((resolve, reject) => {
+                callPlugin('showAnotherPlayersProfile', [params.id], resolve, reject);
+            });
+        },
     }
 })();
 

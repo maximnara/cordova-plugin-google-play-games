@@ -1,37 +1,33 @@
 package io.luzh.cordova.plugin;
 
 import android.app.Activity;
+import android.app.PendingIntent;
+import android.content.IntentSender;
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
+import android.util.Base64;
 import android.util.Log;
-import android.text.TextUtils;
-import android.os.AsyncTask;
-import android.view.View;
 import android.view.ViewGroup;
-import android.view.Gravity;
-import android.view.ViewGroup.LayoutParams;
 import android.widget.RelativeLayout;
-import android.widget.FrameLayout;
-import android.widget.LinearLayout;
 
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CordovaWebView;
-import org.apache.cordova.PluginResult;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import android.util.Log;
-
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import com.google.android.gms.common.images.ImageManager;
 
 import com.google.android.gms.games.AnnotatedData;
 import com.google.android.gms.games.PlayGamesSdk;
@@ -44,6 +40,9 @@ import com.google.android.gms.games.leaderboard.LeaderboardVariant;
 import com.google.android.gms.games.SnapshotsClient;
 import com.google.android.gms.games.snapshot.Snapshot;
 import com.google.android.gms.games.snapshot.SnapshotMetadata;
+
+import com.google.android.gms.games.FriendsResolutionRequiredException;
+import com.google.android.gms.games.PlayerBuffer;
 
 import android.content.Intent;
 
@@ -61,10 +60,16 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
     private static final int RC_ACHIEVEMENT_UI = 9003;
     private static final int RC_LEADERBOARD_UI = 9004;
     private static final int RC_SAVED_GAMES = 9009;
+    private static final int RC_SHOW_PROFILE = 9010;
+    private static final int SHOW_SHARING_FRIENDS_CONSENT = 1111;
 
     private static final String EVENT_LOAD_SAVED_GAME_REQUEST = "loadSavedGameRequest";
     private static final String EVENT_SAVE_GAME_REQUEST = "saveGameRequest";
     private static final String EVENT_SAVE_GAME_CONFLICT = "saveGameConflict";
+    private static final String EVENT_FRIENDS_LIST_REQUEST_SUCCESSFUL = "friendsListRequestSuccessful";
+
+    private static final int ERROR_CODE_HAS_RESOLUTION = 1;
+    private static final int ERROR_CODE_NO_RESOLUTION = 2;
 
     private RelativeLayout bannerContainerLayout;
     private CordovaWebView cordovaWebView;
@@ -128,6 +133,16 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
             return true;
         }
 
+        else if (action.equals("getFriendsList")) {
+            this.getFriendsListAction(callbackContext);
+            return true;
+        }
+
+        else if (action.equals("showAnotherPlayersProfile")) {
+            this.showAnotherPlayersProfileAction(args.getString(0), callbackContext);
+            return true;
+        }
+
         return false;
     }
 
@@ -159,6 +174,37 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
                 view.loadUrl(String.format("javascript:cordova.fireWindowEvent('%s', %s);", event, data.toString()));
             }
         });
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent intent) {
+        GooglePlayGamesPlugin self = this;
+        Log.d(TAG, "onActivityResult");
+        if (intent != null) {
+            if (intent.hasExtra(SnapshotsClient.EXTRA_SNAPSHOT_METADATA)) {
+                // Load a snapshot.
+                SnapshotMetadata snapshotMetadata =
+                        intent.getParcelableExtra(SnapshotsClient.EXTRA_SNAPSHOT_METADATA);
+                String mCurrentSaveName = snapshotMetadata.getUniqueName();
+                try {
+                    JSONObject result = new JSONObject();
+                    result.put("id", mCurrentSaveName);
+                    self.emitWindowEvent(EVENT_LOAD_SAVED_GAME_REQUEST, result);
+                } catch (JSONException err) {
+                    Log.d(TAG, "onActivityResult error", err);
+                }
+            } else if (intent.hasExtra(SnapshotsClient.EXTRA_SNAPSHOT_NEW)) {
+                // Create a new snapshot named with a unique string
+                self.emitWindowEvent(EVENT_SAVE_GAME_REQUEST);
+            } else if (requestCode == SHOW_SHARING_FRIENDS_CONSENT) {
+                if (resultCode == Activity.RESULT_OK) {
+                    Log.e(TAG, "Load friends: OK");
+                    self.emitWindowEvent(EVENT_FRIENDS_LIST_REQUEST_SUCCESSFUL);
+                } else {
+                    Log.e(TAG, "Load friends: No access");
+                }
+            }
+        }
     }
 
     /** ----------------------- INITIALIZATION --------------------------- */
@@ -328,30 +374,6 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
         });
     }
 
-    @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent intent) {
-        GooglePlayGamesPlugin self = this;
-        Log.d(TAG, "onActivityResult");
-        if (intent != null) {
-            if (intent.hasExtra(SnapshotsClient.EXTRA_SNAPSHOT_METADATA)) {
-                // Load a snapshot.
-                SnapshotMetadata snapshotMetadata =
-                        intent.getParcelableExtra(SnapshotsClient.EXTRA_SNAPSHOT_METADATA);
-                String mCurrentSaveName = snapshotMetadata.getUniqueName();
-                try {
-                    JSONObject result = new JSONObject();
-                    result.put("id", mCurrentSaveName);
-                    self.emitWindowEvent(EVENT_LOAD_SAVED_GAME_REQUEST, result);
-                } catch (JSONException err) {
-                    Log.d(TAG, "onActivityResult error", err);
-                }
-            } else if (intent.hasExtra(SnapshotsClient.EXTRA_SNAPSHOT_NEW)) {
-                // Create a new snapshot named with a unique string
-                self.emitWindowEvent(EVENT_SAVE_GAME_REQUEST);
-            }
-        }
-    }
-
     /**
      * Save game
      */
@@ -449,6 +471,148 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
                             });
                         }
                     });
+            }
+        });
+    }
+
+    private void getFriendsListAction(final CallbackContext callbackContext) {
+        GooglePlayGamesPlugin self = this;
+        cordova.getActivity().runOnUiThread(new Runnable() {
+            public void run() {
+                int pageSize = 200;
+                PlayGames.getPlayersClient(cordova.getActivity())
+                        .loadFriends(pageSize,false)
+                        .addOnSuccessListener(
+                            new OnSuccessListener<AnnotatedData<PlayerBuffer>>() {
+                                @Override
+                                public void onSuccess(AnnotatedData<PlayerBuffer> data) {
+                                    PlayerBuffer playerBuffer = data.get();
+
+                                    JSONArray players = new JSONArray();
+                                    try {
+                                        AtomicInteger currentCount = new AtomicInteger();
+                                        int totalCount = playerBuffer.getCount();
+                                        for (int i = 0; i < playerBuffer.getCount(); i++) {
+                                            JSONObject player = new JSONObject();
+                                            player.put("id", playerBuffer.get(i).getPlayerId());
+                                            player.put("name", playerBuffer.get(i).getDisplayName());
+                                            player.put("title", playerBuffer.get(i).getTitle());
+                                            player.put("retrievedTimestamp", playerBuffer.get(i).getRetrievedTimestamp());
+                                            if (playerBuffer.get(i).getBannerImageLandscapeUri() != null) {
+                                                player.put("bannerImageLandscapeUri", playerBuffer.get(i).getBannerImageLandscapeUri().toString());
+                                            }
+                                            if (playerBuffer.get(i).getBannerImagePortraitUri() != null) {
+                                                player.put("bannerImagePortraitUri", playerBuffer.get(i).getBannerImagePortraitUri().toString());
+                                            }
+                                            if (playerBuffer.get(i).hasIconImage()) {
+                                                player.put("iconImageUri", playerBuffer.get(i).getIconImageUri().toString());
+                                            }
+                                            if (playerBuffer.get(i).hasHiResImage()) {
+                                                player.put("hiResImageUri", playerBuffer.get(i).getHiResImageUri().toString());
+                                            }
+                                            if (playerBuffer.get(i).getLevelInfo() != null) {
+                                                JSONObject levelInfo = new JSONObject();
+                                                levelInfo.put("currentLevel", playerBuffer.get(i).getLevelInfo().getCurrentLevel().getLevelNumber());
+                                                levelInfo.put("maxXp", playerBuffer.get(i).getLevelInfo().getCurrentLevel().getMaxXp());
+                                                levelInfo.put("minXp", playerBuffer.get(i).getLevelInfo().getCurrentLevel().getMinXp());
+                                                levelInfo.put("hashCode", playerBuffer.get(i).getLevelInfo().getCurrentLevel().hashCode());
+                                                player.put("levelInfo", levelInfo);
+                                            }
+                                            if (playerBuffer.get(i).getCurrentPlayerInfo() != null) {
+                                                JSONObject currentPlayerInfo = new JSONObject();
+                                                currentPlayerInfo.put("friendsListVisibilityStatus", playerBuffer.get(i).getCurrentPlayerInfo().getFriendsListVisibilityStatus());
+                                                player.put("currentPlayerInfo", currentPlayerInfo);
+                                            }
+                                            if (playerBuffer.get(i).getRelationshipInfo() != null) {
+                                                player.put("friendStatus", playerBuffer.get(i).getRelationshipInfo().getFriendStatus());
+                                            }
+
+                                            if (playerBuffer.get(i).hasIconImage()) {
+                                                ImageManager mgr = ImageManager.create(cordova.getContext());
+                                                mgr.loadImage((uri, drawable, isRequestedDrawable) -> {
+                                                    if (isRequestedDrawable) {
+                                                        Bitmap bitmap = ((BitmapDrawable) drawable).getBitmap();
+                                                        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                                                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
+                                                        byte[] byteArray = byteArrayOutputStream.toByteArray();
+                                                        String encoded = Base64.encodeToString(byteArray, Base64.DEFAULT);
+                                                        try {
+                                                            player.put("iconImageBase64", "data:image/png;base64, " + encoded);
+                                                            players.put(player);
+                                                            currentCount.addAndGet(1);
+                                                            if (currentCount.intValue() >= totalCount) {
+                                                                callbackContext.success(players);
+                                                            }
+                                                        } catch (Exception e) {
+                                                            Log.e(TAG, "Error while getting base64 for user from friend list.");
+                                                        }
+                                                    }
+                                                }, Objects.requireNonNull(playerBuffer.get(i).getIconImageUri()));
+                                            }
+                                        }
+                                    } catch (JSONException err) {
+                                        try {
+                                            JSONObject error = new JSONObject();
+                                            error.put("code", ERROR_CODE_NO_RESOLUTION);
+                                            error.put("message", "Error while retrieving friends list: " + err.getMessage());
+                                            callbackContext.error(error);
+                                        } catch (JSONException e) {
+                                            callbackContext.error("Error while retrieving friends list: " + e.getMessage());
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                        .addOnFailureListener(exception -> {
+                            if (exception instanceof FriendsResolutionRequiredException) {
+                                PendingIntent pendingIntent =
+                                        ((FriendsResolutionRequiredException) exception).getResolution();
+                                try {
+                                    cordova.setActivityResultCallback(self);
+                                    cordova.getActivity().startIntentSenderForResult(
+                                            pendingIntent.getIntentSender(),
+                                            /* requestCode */ SHOW_SHARING_FRIENDS_CONSENT,
+                                            /* fillInIntent */ null,
+                                            /* flagsMask */ 0,
+                                            /* flagsValues */ 0,
+                                            /* extraFlags */ 0,
+                                            /* options */ null);
+                                    try {
+                                        JSONObject error = new JSONObject();
+                                        error.put("code", ERROR_CODE_HAS_RESOLUTION);
+                                        error.put("message", "Waiting user give permission for fetch friends list, check events.");
+                                        callbackContext.error(error);
+                                    } catch (JSONException e) {
+                                        callbackContext.error("Error while retrieving friends list: " + e.getMessage());
+                                    }
+                                } catch (IntentSender.SendIntentException err) {
+                                    try {
+                                        JSONObject error = new JSONObject();
+                                        error.put("code", ERROR_CODE_NO_RESOLUTION);
+                                        error.put("message", "Error while asking permission for retrieving friends list: " + err.getMessage());
+                                        callbackContext.error(error);
+                                    } catch (JSONException e) {
+                                        callbackContext.error("Error while retrieving friends list: " + e.getMessage());
+                                    }
+                                }
+                            }
+                        });
+            }
+        });
+    }
+
+    private void showAnotherPlayersProfileAction(String playerId, final CallbackContext callbackContext) {
+        GooglePlayGamesPlugin self = this;
+        cordova.getActivity().runOnUiThread(new Runnable() {
+            public void run() {
+                PlayGames.getPlayersClient(cordova.getActivity())
+                    .getCompareProfileIntent(playerId)
+                    .addOnSuccessListener(new OnSuccessListener<Intent>() {
+                        @Override
+                        public void onSuccess(Intent  intent) {
+                            cordova.getActivity().startActivityForResult(intent, RC_SHOW_PROFILE);
+                            callbackContext.success();
+                        }});
             }
         });
     }

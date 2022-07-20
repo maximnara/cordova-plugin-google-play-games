@@ -19,7 +19,7 @@ You can login, make game saves, have leaderboard and achievements.
 - [x] <img src="https://img.shields.io/badge/-Complete-brightgreen.svg?label=Achievements%20Support&style=flat-square">
 - [x] <img src="https://img.shields.io/badge/-Complete-brightgreen.svg?label=Leaderboards%20Support&style=flat-square">
 - [x] <img src="https://img.shields.io/badge/-Complete-brightgreen.svg?label=Game%20Savings%20Support&style=flat-square">
-- [ ] <img src="https://img.shields.io/badge/-In%20Development-yellow.svg?label=Friends%20Support&style=flat-square">
+- [x] <img src="https://img.shields.io/badge/-Complete-brightgreen.svg?label=Friends%20Support&style=flat-square">
 - [ ] <img src="https://img.shields.io/badge/-In%20Development-yellow.svg?label=Player%20Stats%20Support&style=flat-square">
 - [ ] <img src="https://img.shields.io/badge/-In%20Development-yellow.svg?label=Anti-Piracy%20Support&style=flat-square">
 
@@ -59,6 +59,9 @@ And in strings.xml (app/src/main/res/values/strings.xml):
   - [Load game save](#load-game-save)
   - [Show saved games](#show-saved-games)
   - [Saved Games Events](#saved-games-events)
+- [Friends](#friends)
+  - [Get friend list](#get-friend-list)
+  - [Show another players profile](#show-another-players-profile)
   
   
 This library is Promise style, you can use .then or await to fetch results
@@ -186,4 +189,65 @@ window.addEventListener("saveGameConflict", async (event) => {
 });
 ```
 
-### Feel free to make your PRs for code structure or new functions
+***
+
+### Friends
+
+#### Get friend list
+This method will return array of users objects. Inside objects all available info.
+Method can 
+```javascript
+window.addEventListener("friendsListRequestSuccessful", async () => {
+  try {
+    let list = await GooglePlayGames.getFriendsList();
+  } catch (e) {
+    console.log('No resolution')
+  }
+});
+
+try {
+  let list = await GooglePlayGames.getFriendsList(); 
+} catch (e) {
+  const ERROR_CODE_HAS_RESOLUTION = 1;
+  const ERROR_CODE_NO_RESOLUTION = 2;
+  if (e.code === ERROR_CODE_HAS_RESOLUTION) {
+    // That's all right, user will be asked for Friends permission
+    // After he give access event "friendsListRequestSuccessful" will be fired.
+  } else if (e.code === ERROR_CODE_NO_RESOLUTION) {
+    console.log('No resolution: ' + e.message);
+  }
+}
+```
+```json
+[
+  {
+    "id":"a_99999",
+    "name":"Maxim L.",
+    "title":"Летчик-ас",
+    "retrievedTimestamp":1658298688691,
+    // If you have idea how to deal with content:// URI you can use it
+    "bannerImageLandscapeUri":"content://com.google.android.gms.games.background/images/a19ec21b/1005",
+    "bannerImagePortraitUri":"content://com.google.android.gms.games.background/images/a19ec21b/1006",
+    "iconImageUri":"content://com.google.android.gms.games.background/images/a19ec21b/1003",
+    "hiResImageUri":"content://com.google.android.gms.games.background/images/a19ec21b/1004",
+    "levelInfo": {
+      "currentLevel":11,
+      "maxXp":90000,
+      "minXp":70000,
+      "hashCode":2300362
+    },
+    "friendStatus":4, // Have no idea what is that yet
+    // Use that to show user pic in <img> tag
+    "iconImageBase64":"data:image/png;base64, iVBORw0KGgoAAAANSUhEUgAAA..." 
+  }
+]
+```
+***
+
+#### Show another players profile
+This method will show standard Play Games menu with user info.
+```javascript
+await GooglePlayGames.showAnotherPlayersProfile({ id: result[0].id });
+```
+
+### Feel free to make your PRs for code structure or new functions or message me in Telegram @luzhkov
