@@ -62,6 +62,7 @@ And in strings.xml (app/src/main/res/values/strings.xml):
 - [Friends](#friends)
   - [Get friend list](#get-friend-list)
   - [Show another players profile](#show-another-players-profile)
+- [Player stats](#player-stats)
   
   
 This library is Promise style, you can use .then or await to fetch results
@@ -248,6 +249,30 @@ try {
 This method will show standard Play Games menu with user info.
 ```javascript
 await GooglePlayGames.showAnotherPlayersProfile({ id: result[0].id });
+```
+***
+
+### Player stats
+This method will resolve 6 available current player stats:  
+
+— Average session length: The average session length of the player in minutes. Session length is determined by the time that a player is signed in to Google Play Games services.   
+— Days since last played: The approximate number of days since the player last played.  
+— Number of purchases: The approximate number of in-app purchases for the player.  
+— Number of sessions: The approximate number of sessions of the player. Sessions are determined by the number of times that a player signs in to Google Play Games services.  
+— Session percentile: The approximation of sessions percentile for the player, given as a decimal value between 0 to 1 inclusive. This value indicates how many sessions the current player has played in comparison to the rest of this game's player base. Higher numbers indicate that this player has played more sessions.  
+— Spend percentile: The approximate spend percentile of the player, given as a decimal value between 0 to 1 inclusive. This value indicates how much the current player has spent in comparison to the rest of this game's player base. Higher numbers indicate that this player has spent more.  
+```javascript
+let stats = await GooglePlayGames.getCurrentPlayerStats();
+
+if (stats.daysSinceLastPlayed > 7) {
+  console.log("It's been longer than a week");
+}
+if (stats.numberOfSessions > 1000) {
+  console.log("Veteran player");
+}
+if (stats.numberOfPurchases == 0) {
+  console.log("Show user special offer");
+}
 ```
 
 ### Feel free to make your PRs for code structure or new functions or message me in Telegram @luzhkov

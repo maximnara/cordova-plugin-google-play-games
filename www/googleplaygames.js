@@ -4,6 +4,11 @@ let GooglePlayGames = (function ()
 {
     return {
 
+        errorCodes: {
+            ERROR_CODE_HAS_RESOLUTION: 1,
+            ERROR_CODE_NO_RESOLUTION: 2,
+        },
+
         /**
          * Login
          */
@@ -187,7 +192,7 @@ let GooglePlayGames = (function ()
          * Show another player profile
          * @param {String} params.id - Another player profile id
          */
-        showAnotherPlayersProfile: function loadGameSave(params)
+        showAnotherPlayersProfile: function showAnotherPlayersProfile(params)
         {
             params = defaults(params, {});
             if (params.hasOwnProperty('id') === false) {
@@ -195,6 +200,22 @@ let GooglePlayGames = (function ()
             }
             return new Promise((resolve, reject) => {
                 callPlugin('showAnotherPlayersProfile', [params.id], resolve, reject);
+            });
+        },
+
+        /**
+         * Returns current player stats.
+         * — Average session length: The average session length of the player in minutes. Session length is determined by the time that a player is signed in to Google Play Games services.
+         * — Days since last played: The approximate number of days since the player last played.
+         * — Number of purchases: The approximate number of in-app purchases for the player.
+         * — Number of sessions: The approximate number of sessions of the player. Sessions are determined by the number of times that a player signs in to Google Play Games services.
+         * — Session percentile: The approximation of sessions percentile for the player, given as a decimal value between 0 to 1 inclusive. This value indicates how many sessions the current player has played in comparison to the rest of this game's player base. Higher numbers indicate that this player has played more sessions.
+         * — Spend percentile: The approximate spend percentile of the player, given as a decimal value between 0 to 1 inclusive. This value indicates how much the current player has spent in comparison to the rest of this game's player base. Higher numbers indicate that this player has spent more.
+         */
+        getCurrentPlayerStats: function getCurrentPlayerStats()
+        {
+            return new Promise((resolve, reject) => {
+                callPlugin('getCurrentPlayerStats', [], resolve, reject);
             });
         },
     }

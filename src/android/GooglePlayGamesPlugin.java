@@ -27,6 +27,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.common.api.CommonStatusCodes;
 import com.google.android.gms.common.images.ImageManager;
 
 import com.google.android.gms.games.AnnotatedData;
@@ -43,6 +45,8 @@ import com.google.android.gms.games.snapshot.SnapshotMetadata;
 
 import com.google.android.gms.games.FriendsResolutionRequiredException;
 import com.google.android.gms.games.PlayerBuffer;
+
+import com.google.android.gms.games.stats.PlayerStats;
 
 import android.content.Intent;
 
@@ -140,6 +144,11 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
 
         else if (action.equals("showAnotherPlayersProfile")) {
             this.showAnotherPlayersProfileAction(args.getString(0), callbackContext);
+            return true;
+        }
+
+        else if (action.equals("getCurrentPlayerStats")) {
+            this.getCurrentPlayerStatsAction(callbackContext);
             return true;
         }
 
@@ -615,5 +624,46 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
                         }});
             }
         });
+    }
+
+    private void getCurrentPlayerStatsAction(final CallbackContext callbackContext) {
+        PlayGames.getPlayerStatsClient(cordova.getActivity())
+            .loadPlayerStats(true)
+            .addOnCompleteListener(new OnCompleteListener<AnnotatedData<PlayerStats>>() {
+                @Override
+                public void onComplete(@NonNull Task<AnnotatedData<PlayerStats>> task) {
+                    if (task.isSuccessful()) {
+                        // Check for cached data.
+                        if (task.getResult().isStale()) {
+                            Log.d(TAG, "Using cached data");
+                        }
+                        PlayerStats stats = task.getResult().get();
+                        JSONObject resultStats = new JSONObject();
+                        if (stats != null) {
+                            Log.d(TAG, "Player stats loaded");
+                            try {
+                                resultStats.put("averageSessionLength", stats.getAverageSessionLength());
+                                resultStats.put("daysSinceLastPlayed", stats.getDaysSinceLastPlayed());
+                                resultStats.put("numberOfPurchases", stats.getNumberOfPurchases());
+                                resultStats.put("numberOfSessions", stats.getNumberOfSessions());
+                                resultStats.put("sessionPercentile", stats.getSessionPercentile());
+                                resultStats.put("spendPercentile", stats.getSpendPercentile());
+                                callbackContext.success(resultStats);
+                            } catch (JSONException e) {
+                                callbackContext.error("Error while creating player stats result object. Error: " + e.getMessage());
+                            }
+                        }
+                    } else {
+                        int status = CommonStatusCodes.DEVELOPER_ERROR;
+                        if (task.getException() instanceof ApiException) {
+                            status = ((ApiException) task.getException()).getStatusCode();
+                        }
+                        if (task.getException() != null) {
+                            callbackContext.error("Failed to fetch Stats Data status: " + status + ": " + task.getException().getMessage());
+                        }
+                        Log.d(TAG, "Failed to fetch Stats Data status: " + status + ": " + task.getException());
+                    }
+                }
+            });
     }
 }
