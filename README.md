@@ -327,4 +327,4 @@ let event = await GooglePlayGames.getEvent({ id: 'id-from-play-console' });
 }
 ```
 
-### Feel free to make your PRs for code structure or new functions or message me in Telegram @luzhkov
+### Feel free to make your PRs for code structure or new functions or text me in Telegram @luzhkov
