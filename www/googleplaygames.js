@@ -218,6 +218,47 @@ let GooglePlayGames = (function ()
                 callPlugin('getCurrentPlayerStats', [], resolve, reject);
             });
         },
+
+        /**
+         * Increment event
+         * @param {String} params.id - Event id from play console
+         * @param {Integer} params.amount - Amount of how much to increment
+         */
+        incrementEvent: function incrementEvent(params)
+        {
+            params = defaults(params, {});
+            if (params.hasOwnProperty('id') === false || params.hasOwnProperty('amount') === false) {
+                throw new Error('You should specify event id and amount parameters');
+            }
+            return new Promise((resolve, reject) => {
+                callPlugin('incrementEvent', [params.id, params.amount], resolve, reject);
+            });
+        },
+
+        /**
+         * Get all events
+         */
+        getAllEvents: function getAllEvents(params)
+        {
+            return new Promise((resolve, reject) => {
+                callPlugin('getAllEvents', [], resolve, reject);
+            });
+        },
+
+        /**
+         * Get event by id
+         * @param {String} params.id - Event id from play console
+         */
+        getEvent: function getEvent(params)
+        {
+            params = defaults(params, {});
+            if (params.hasOwnProperty('id') === false) {
+                throw new Error('You should specify event id parameters');
+            }
+            return new Promise((resolve, reject) => {
+                callPlugin('getEvent', [params.id], resolve, reject);
+            });
+        },
     }
 })();
 

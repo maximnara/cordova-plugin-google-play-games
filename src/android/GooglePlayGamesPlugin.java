@@ -48,6 +48,9 @@ import com.google.android.gms.games.PlayerBuffer;
 
 import com.google.android.gms.games.stats.PlayerStats;
 
+import com.google.android.gms.games.event.EventBuffer;
+import com.google.android.gms.games.event.Event;
+
 import android.content.Intent;
 
 import com.google.android.gms.games.snapshot.SnapshotMetadataChange;
@@ -82,12 +85,7 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
     @Override
     public boolean execute(String action, JSONArray args, final CallbackContext callbackContext) throws JSONException {
 
-        if (action.equals("init")) {
-            this.initAction(args, callbackContext);
-            return true;
-        }
-
-        else if (action.equals("login")) {
+        if (action.equals("login")) {
             this.loginAction(args, callbackContext);
             return true;
         }
@@ -149,6 +147,21 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
 
         else if (action.equals("getCurrentPlayerStats")) {
             this.getCurrentPlayerStatsAction(callbackContext);
+            return true;
+        }
+
+        else if (action.equals("incrementEvent")) {
+            this.incrementEventAction(args.getString(0), args.getInt(1), callbackContext);
+            return true;
+        }
+
+        else if (action.equals("getAllEvents")) {
+            this.getAllEventsAction(callbackContext);
+            return true;
+        }
+
+        else if (action.equals("getEvent")) {
+            this.getEventAction(args.getString(0), callbackContext);
             return true;
         }
 
@@ -216,17 +229,8 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
         }
     }
 
-    /** ----------------------- INITIALIZATION --------------------------- */
-
     /**
-     * Intilization action Initializes Yandex Ads
-     */
-    private void initAction(JSONArray args, final CallbackContext callbackContext) throws JSONException {
-
-    }
-
-    /**
-     * Initializes Rewarded ad
+     * Login
      */
     private void loginAction(JSONArray args, final CallbackContext callbackContext) {
         cordova.getActivity().runOnUiThread(new Runnable() {
@@ -557,6 +561,12 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
                                                         }
                                                     }
                                                 }, Objects.requireNonNull(playerBuffer.get(i).getIconImageUri()));
+                                            } else {
+                                                players.put(player);
+                                                currentCount.addAndGet(1);
+                                                if (currentCount.intValue() >= totalCount) {
+                                                    callbackContext.success(players);
+                                                }
                                             }
                                         }
                                     } catch (JSONException err) {
@@ -611,7 +621,6 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
     }
 
     private void showAnotherPlayersProfileAction(String playerId, final CallbackContext callbackContext) {
-        GooglePlayGamesPlugin self = this;
         cordova.getActivity().runOnUiThread(new Runnable() {
             public void run() {
                 PlayGames.getPlayersClient(cordova.getActivity())
@@ -665,5 +674,208 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
                     }
                 }
             });
+    }
+
+    private void getAllEventsAction(final CallbackContext callbackContext) {
+        GooglePlayGamesPlugin self = this;
+        cordova.getActivity().runOnUiThread(new Runnable() {
+            public void run() {
+                PlayGames.getEventsClient(cordova.getActivity())
+                    .load(true)
+                    .addOnCompleteListener(new OnCompleteListener<AnnotatedData<EventBuffer>>() {
+                        @Override
+                        public void onComplete(@NonNull Task<AnnotatedData<EventBuffer>> task) {
+                            if (task.isSuccessful()) {
+                                // Process all the events.
+                                JSONArray events = new JSONArray();
+                                AtomicInteger currentCount = new AtomicInteger();
+                                int totalCount = task.getResult().get().getCount();
+                                if (totalCount == 0) {
+                                    callbackContext.success(events);
+                                }
+                                for (Event event : task.getResult().get()) {
+                                    Log.d(TAG, "loaded event " + event.getName() + ", " + event.getEventId() + ", " + event.getDescription() + ", " + event.getIconImageUri() + ", " + event.getFormattedValue() + ", " + event.getValue() + ", " + event.getPlayer().getPlayerId() + ", " + event.isVisible());
+                                    try {
+                                        JSONObject resultEvent = new JSONObject();
+                                        resultEvent.put("id", event.getEventId());
+                                        resultEvent.put("name", event.getName());
+                                        resultEvent.put("description", event.getDescription());
+                                        resultEvent.put("iconImageUri", event.getIconImageUri());
+                                        resultEvent.put("formattedValue", event.getFormattedValue());
+                                        resultEvent.put("value", event.getValue());
+
+                                        JSONObject player = new JSONObject();
+                                        player.put("id", event.getPlayer().getPlayerId());
+                                        player.put("name", event.getPlayer().getDisplayName());
+                                        player.put("title", event.getPlayer().getTitle());
+                                        player.put("retrievedTimestamp", event.getPlayer().getRetrievedTimestamp());
+                                        if (event.getPlayer().getBannerImageLandscapeUri() != null) {
+                                            player.put("bannerImageLandscapeUri", event.getPlayer().getBannerImageLandscapeUri().toString());
+                                        }
+                                        if (event.getPlayer().getBannerImagePortraitUri() != null) {
+                                            player.put("bannerImagePortraitUri", event.getPlayer().getBannerImagePortraitUri().toString());
+                                        }
+                                        if (event.getPlayer().hasIconImage()) {
+                                            player.put("iconImageUri", event.getPlayer().getIconImageUri().toString());
+                                        }
+                                        if (event.getPlayer().hasHiResImage()) {
+                                            player.put("hiResImageUri", event.getPlayer().getHiResImageUri().toString());
+                                        }
+                                        if (event.getPlayer().getLevelInfo() != null) {
+                                            JSONObject levelInfo = new JSONObject();
+                                            levelInfo.put("currentLevel", event.getPlayer().getLevelInfo().getCurrentLevel().getLevelNumber());
+                                            levelInfo.put("maxXp", event.getPlayer().getLevelInfo().getCurrentLevel().getMaxXp());
+                                            levelInfo.put("minXp", event.getPlayer().getLevelInfo().getCurrentLevel().getMinXp());
+                                            levelInfo.put("hashCode", event.getPlayer().getLevelInfo().getCurrentLevel().hashCode());
+                                            player.put("levelInfo", levelInfo);
+                                        }
+
+                                        if (event.getPlayer().hasIconImage()) {
+                                            ImageManager mgr = ImageManager.create(cordova.getContext());
+                                            mgr.loadImage((uri, drawable, isRequestedDrawable) -> {
+                                                if (isRequestedDrawable) {
+                                                    Bitmap bitmap = ((BitmapDrawable) drawable).getBitmap();
+                                                    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                                                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
+                                                    byte[] byteArray = byteArrayOutputStream.toByteArray();
+                                                    String encoded = Base64.encodeToString(byteArray, Base64.DEFAULT);
+                                                    try {
+                                                        player.put("iconImageBase64", "data:image/png;base64, " + encoded);
+                                                        resultEvent.put("player", player);
+                                                        events.put(resultEvent);
+                                                        currentCount.addAndGet(1);
+                                                        if (currentCount.intValue() >= totalCount) {
+                                                            callbackContext.success(events);
+                                                        }
+                                                    } catch (Exception e) {
+                                                        Log.e(TAG, "Error while getting base64 for user from friend list.");
+                                                    }
+                                                }
+                                            }, Objects.requireNonNull(event.getPlayer().getIconImageUri()));
+                                        } else {
+                                            resultEvent.put("player", player);
+                                            events.put(resultEvent);
+                                            currentCount.addAndGet(1);
+                                            if (currentCount.intValue() >= totalCount) {
+                                                callbackContext.success(events);
+                                            }
+                                        }
+                                    } catch (JSONException e) {
+                                        Log.d(TAG, "Error while receiving event: " + e.getMessage());
+                                    }
+                                }
+                            } else {
+                                // Handle Error
+                                Exception exception = task.getException();
+                                int statusCode = CommonStatusCodes.DEVELOPER_ERROR;
+                                if (exception instanceof ApiException) {
+                                    ApiException apiException = (ApiException) exception;
+                                    statusCode = apiException.getStatusCode();
+                                }
+                                Log.d(TAG, "event error " + statusCode);
+                            }
+                        }
+                    });
+            }
+        });
+    }
+
+    private void getEventAction(String id, final CallbackContext callbackContext) {
+        GooglePlayGamesPlugin self = this;
+        cordova.getActivity().runOnUiThread(new Runnable() {
+            public void run() {
+                PlayGames.getEventsClient(cordova.getActivity())
+                    .loadByIds(true, id)
+                    .addOnCompleteListener(new OnCompleteListener<AnnotatedData<EventBuffer>>() {
+                        @Override
+                        public void onComplete(@NonNull Task<AnnotatedData<EventBuffer>> task) {
+                            if (task.isSuccessful()) {
+                                // Process all the events.
+                                for (Event event : task.getResult().get()) {
+                                    Log.d(TAG, "loaded event " + event.getName() + ", " + event.getEventId() + ", " + event.getDescription() + ", " + event.getIconImageUri() + ", " + event.getFormattedValue() + ", " + event.getValue() + ", " + event.getPlayer().getPlayerId() + ", " + event.isVisible());
+                                    try {
+                                        JSONObject resultEvent = new JSONObject();
+                                        resultEvent.put("id", event.getEventId());
+                                        resultEvent.put("name", event.getName());
+                                        resultEvent.put("description", event.getDescription());
+                                        resultEvent.put("iconImageUri", event.getIconImageUri());
+                                        resultEvent.put("formattedValue", event.getFormattedValue());
+                                        resultEvent.put("value", event.getValue());
+
+                                        JSONObject player = new JSONObject();
+                                        player.put("id", event.getPlayer().getPlayerId());
+                                        player.put("name", event.getPlayer().getDisplayName());
+                                        player.put("title", event.getPlayer().getTitle());
+                                        player.put("retrievedTimestamp", event.getPlayer().getRetrievedTimestamp());
+                                        if (event.getPlayer().getBannerImageLandscapeUri() != null) {
+                                            player.put("bannerImageLandscapeUri", event.getPlayer().getBannerImageLandscapeUri().toString());
+                                        }
+                                        if (event.getPlayer().getBannerImagePortraitUri() != null) {
+                                            player.put("bannerImagePortraitUri", event.getPlayer().getBannerImagePortraitUri().toString());
+                                        }
+                                        if (event.getPlayer().hasIconImage()) {
+                                            player.put("iconImageUri", event.getPlayer().getIconImageUri().toString());
+                                        }
+                                        if (event.getPlayer().hasHiResImage()) {
+                                            player.put("hiResImageUri", event.getPlayer().getHiResImageUri().toString());
+                                        }
+                                        if (event.getPlayer().getLevelInfo() != null) {
+                                            JSONObject levelInfo = new JSONObject();
+                                            levelInfo.put("currentLevel", event.getPlayer().getLevelInfo().getCurrentLevel().getLevelNumber());
+                                            levelInfo.put("maxXp", event.getPlayer().getLevelInfo().getCurrentLevel().getMaxXp());
+                                            levelInfo.put("minXp", event.getPlayer().getLevelInfo().getCurrentLevel().getMinXp());
+                                            levelInfo.put("hashCode", event.getPlayer().getLevelInfo().getCurrentLevel().hashCode());
+                                            player.put("levelInfo", levelInfo);
+                                        }
+
+                                        if (event.getPlayer().hasIconImage()) {
+                                            ImageManager mgr = ImageManager.create(cordova.getContext());
+                                            mgr.loadImage((uri, drawable, isRequestedDrawable) -> {
+                                                if (isRequestedDrawable) {
+                                                    Bitmap bitmap = ((BitmapDrawable) drawable).getBitmap();
+                                                    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                                                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
+                                                    byte[] byteArray = byteArrayOutputStream.toByteArray();
+                                                    String encoded = Base64.encodeToString(byteArray, Base64.DEFAULT);
+                                                    try {
+                                                        player.put("iconImageBase64", "data:image/png;base64, " + encoded);
+                                                        resultEvent.put("player", player);
+                                                        callbackContext.success(resultEvent);
+                                                    } catch (Exception e) {
+                                                        Log.e(TAG, "Error while getting base64 for user from friend list.");
+                                                    }
+                                                }
+                                            }, Objects.requireNonNull(event.getPlayer().getIconImageUri()));
+                                        } else {
+                                            resultEvent.put("player", player);
+                                            callbackContext.success(resultEvent);
+                                        }
+                                    } catch (JSONException e) {
+                                        Log.d(TAG, "Error while receiving event: " + e.getMessage());
+                                    }
+                                }
+                            } else {
+                                // Handle Error
+                                Exception exception = task.getException();
+                                int statusCode = CommonStatusCodes.DEVELOPER_ERROR;
+                                if (exception instanceof ApiException) {
+                                    ApiException apiException = (ApiException) exception;
+                                    statusCode = apiException.getStatusCode();
+                                }
+                                Log.d(TAG, "event error " + statusCode);
+                            }
+                        }
+                    });
+            }
+        });
+    }
+
+    private void incrementEventAction(String id, int amount, final CallbackContext callbackContext) {
+        cordova.getActivity().runOnUiThread(new Runnable() {
+            public void run() {
+                PlayGames.getEventsClient(cordova.getActivity()).increment(id, amount);
+                callbackContext.success();
+            }
+        });
     }
 }

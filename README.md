@@ -20,7 +20,8 @@ You can login, make game saves, have leaderboard and achievements.
 - [x] <img src="https://img.shields.io/badge/-Complete-brightgreen.svg?label=Leaderboards%20Support&style=flat-square">
 - [x] <img src="https://img.shields.io/badge/-Complete-brightgreen.svg?label=Game%20Savings%20Support&style=flat-square">
 - [x] <img src="https://img.shields.io/badge/-Complete-brightgreen.svg?label=Friends%20Support&style=flat-square">
-- [ ] <img src="https://img.shields.io/badge/-In%20Development-yellow.svg?label=Player%20Stats%20Support&style=flat-square">
+- [x] <img src="https://img.shields.io/badge/-Complete-brightgreen.svg?label=Player%20Stats%20Support&style=flat-square">
+- [x] <img src="https://img.shields.io/badge/-Complete-brightgreen.svg?label=Events%20Support&style=flat-square">
 - [ ] <img src="https://img.shields.io/badge/-In%20Development-yellow.svg?label=Anti-Piracy%20Support&style=flat-square">
 
 -------- 
@@ -63,6 +64,10 @@ And in strings.xml (app/src/main/res/values/strings.xml):
   - [Get friend list](#get-friend-list)
   - [Show another players profile](#show-another-players-profile)
 - [Player stats](#player-stats)
+- [Events](#events)
+  - [Increment event](#increment-event)
+  - [Get all events](#get-all-events)
+  - [Get event by id](#get-event-by-id)
   
   
 This library is Promise style, you can use .then or await to fetch results
@@ -272,6 +277,52 @@ if (stats.numberOfSessions > 1000) {
 }
 if (stats.numberOfPurchases == 0) {
   console.log("Show user special offer");
+}
+```
+***
+
+### Events
+Events it is basically place where you can store some data about user: balance, level and something like this.
+
+#### Increment event
+
+```javascript
+await GooglePlayGames.incrementEvent({ id: 'id-from-play-console', amount: 10 })
+```
+
+#### Get all events
+
+```javascript
+let events = await GooglePlayGames.getAllEvents();
+```
+
+#### Get event by id
+
+```javascript
+let event = await GooglePlayGames.getEvent({ id: 'id-from-play-console' });
+```
+```json
+{
+  "id":"id-from-play-console",
+  "name":"Test event",
+  "value":1012,
+  "player": {
+      "id":"a_108",
+      "name":"luzhkov.max",
+      "title":"Newbie",
+      "retrievedTimestamp":1658301492400,
+      "bannerImageLandscapeUri":"content://com.google.android.gms.games.background/images/a19ec21b/1001",
+      "bannerImagePortraitUri":"content://com.google.android.gms.games.background/images/a19ec21b/1002",
+      "iconImageUri":"content://com.google.android.gms.games.background/images/a19ec21b/1000",
+      "hiResImageUri":"content://com.google.android.gms.games.background/images/a19ec21b/6",
+      "levelInfo": {
+        "currentLevel":1,
+        "maxXp":1000,
+        "minXp":0,
+        "hashCode":31752
+      }, 
+      "iconImageBase64":"data:image/png;base64, iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAAAX..."
+  }
 }
 ```
 
