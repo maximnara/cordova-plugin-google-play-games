@@ -285,7 +285,7 @@ if (stats.numberOfPurchases == 0) {
 Events it is basically place where you can store some data about user: balance, level and something like this.
 
 #### Increment event
-
+Value should be more than 0. Increment raw integer, money or time here. 
 ```javascript
 await GooglePlayGames.incrementEvent({ id: 'id-from-play-console', amount: 10 })
 ```
@@ -293,6 +293,7 @@ await GooglePlayGames.incrementEvent({ id: 'id-from-play-console', amount: 10 })
 #### Get all events
 
 ```javascript
+// Returns array of objects here, what inside object check below
 let events = await GooglePlayGames.getAllEvents();
 ```
 
@@ -303,10 +304,10 @@ let event = await GooglePlayGames.getEvent({ id: 'id-from-play-console' });
 ```
 ```json
 {
-  "id":"id-from-play-console",
+  "id":"id-from-play-console", // Id by what you can identify events in your app
   "name":"Test event",
-  "value":1012,
-  "player": {
+  "value":1012, // This is amount you increment on previous step
+  "player": { // Some info about player you can use instantly
       "id":"a_108",
       "name":"luzhkov.max",
       "title":"Newbie",
