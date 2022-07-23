@@ -63,6 +63,39 @@ let GooglePlayGames = (function ()
         },
 
         /**
+         * Reveal achievement
+         * @param {String} params.id - id of achievement
+         */
+        revealAchievement: function revealAchievement(params)
+        {
+            params = defaults(params, {});
+            if (params.hasOwnProperty('id') === false)
+            {
+                throw new Error('You should specify id of achievement');
+            }
+            return new Promise((resolve, reject) => {
+                callPlugin('revealAchievement', [params.id], resolve, reject);
+            });
+        },
+
+        /**
+         * Set count of steps in achievement
+         * @param {String} params.id - id of achievement
+         * @param {Number} params.count - count of steps, should be greater than 0
+         */
+        setStepsInAchievement: function setStepsInAchievement(params)
+        {
+            params = defaults(params, {});
+            if (params.hasOwnProperty('id') === false || params.hasOwnProperty('count') === false)
+            {
+                throw new Error('You should specify id of achievement and count of steps');
+            }
+            return new Promise((resolve, reject) => {
+                callPlugin('setStepsInAchievement', [params.id, params.count], resolve, reject);
+            });
+        },
+
+        /**
          * Update player score
          * @param {String} params.id - id of leaderboard
          * @param {Number} params.score - player score to set
@@ -108,6 +141,16 @@ let GooglePlayGames = (function ()
             }
             return new Promise((resolve, reject) => {
                 callPlugin('showLeaderboard', [params.id], resolve, reject);
+            });
+        },
+
+        /**
+         * Show all leaderboards
+         */
+        showAllLeaderboards: function showAllLeaderboards()
+        {
+            return new Promise((resolve, reject) => {
+                callPlugin('showAllLeaderboards', [], resolve, reject);
             });
         },
 
@@ -204,6 +247,32 @@ let GooglePlayGames = (function ()
         },
 
         /**
+         * Show player search
+         */
+        showPlayerSearch: function showPlayerSearch()
+        {
+            return new Promise((resolve, reject) => {
+                callPlugin('showPlayerSearch', [], resolve, reject);
+            });
+        },
+
+        /**
+         * Get player
+         * @param {String} params.id - Player id
+         * @param {Boolean=false} params.forceReload - Do google games need to force reload player data from server. This may cause lack of work speed.
+         */
+        getPlayer: function getPlayer(params)
+        {
+            params = defaults(params, { forceReload: false });
+            if (params.hasOwnProperty('id') === false) {
+                throw new Error('You should specify player id');
+            }
+            return new Promise((resolve, reject) => {
+                callPlugin('getPlayer', [params.id, params.forceReload], resolve, reject);
+            });
+        },
+
+        /**
          * Returns current player stats.
          * — Average session length: The average session length of the player in minutes. Session length is determined by the time that a player is signed in to Google Play Games services.
          * — Days since last played: The approximate number of days since the player last played.
@@ -238,7 +307,7 @@ let GooglePlayGames = (function ()
         /**
          * Get all events
          */
-        getAllEvents: function getAllEvents(params)
+        getAllEvents: function getAllEvents()
         {
             return new Promise((resolve, reject) => {
                 callPlugin('getAllEvents', [], resolve, reject);

@@ -5,6 +5,7 @@ import android.app.PendingIntent;
 import android.content.IntentSender;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
+import android.os.Parcelable;
 import android.util.Base64;
 import android.util.Log;
 import android.view.ViewGroup;
@@ -24,6 +25,8 @@ import androidx.annotation.Nullable;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -31,11 +34,16 @@ import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.CommonStatusCodes;
 import com.google.android.gms.common.images.ImageManager;
 
+import com.google.android.gms.games.AchievementsClient;
 import com.google.android.gms.games.AnnotatedData;
 import com.google.android.gms.games.PlayGamesSdk;
 import com.google.android.gms.games.PlayGames;
 import com.google.android.gms.games.GamesSignInClient;
+import com.google.android.gms.games.LeaderboardsClient;
 
+import com.google.android.gms.games.Player;
+import com.google.android.gms.games.PlayersClient;
+import com.google.android.gms.games.leaderboard.LeaderboardBuffer;
 import com.google.android.gms.games.leaderboard.LeaderboardScore;
 import com.google.android.gms.games.leaderboard.LeaderboardVariant;
 
@@ -66,8 +74,10 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
 
     private static final int RC_ACHIEVEMENT_UI = 9003;
     private static final int RC_LEADERBOARD_UI = 9004;
+    private static final int RC_LEADERBOARDS_UI = 9005;
     private static final int RC_SAVED_GAMES = 9009;
     private static final int RC_SHOW_PROFILE = 9010;
+    private static final int RC_SHOW_PLAYER_SEARCH = 9011;
     private static final int SHOW_SHARING_FRIENDS_CONSENT = 1111;
 
     private static final String EVENT_LOAD_SAVED_GAME_REQUEST = "loadSavedGameRequest";
@@ -105,6 +115,16 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
             return true;
         }
 
+        else if (action.equals("revealAchievement")) {
+            this.revealAchievementAction(args.getString(0), callbackContext);
+            return true;
+        }
+
+        else if (action.equals("setStepsInAchievement")) {
+            this.setStepsInAchievementAction(args.getString(0), args.getInt(1), callbackContext);
+            return true;
+        }
+
         else if (action.equals("updatePlayerScore")) {
             this.updatePlayerScoreAction(args.getString(0), args.getInt(1), callbackContext);
             return true;
@@ -117,6 +137,11 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
 
         else if (action.equals("showLeaderboard")) {
             this.showLeaderboardAction(args.getString(0), callbackContext);
+            return true;
+        }
+
+        else if (action.equals("showAllLeaderboards")) {
+            this.showAllLeaderboardsAction(callbackContext);
             return true;
         }
 
@@ -142,6 +167,16 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
 
         else if (action.equals("showAnotherPlayersProfile")) {
             this.showAnotherPlayersProfileAction(args.getString(0), callbackContext);
+            return true;
+        }
+
+        else if (action.equals("showPlayerSearch")) {
+            this.showPlayerSearchAction(callbackContext);
+            return true;
+        }
+
+        else if (action.equals("getPlayer")) {
+            this.getPlayerAction(args.getString(0), args.getBoolean(1), callbackContext);
             return true;
         }
 
@@ -201,9 +236,24 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent intent) {
         GooglePlayGamesPlugin self = this;
-        Log.d(TAG, "onActivityResult");
         if (intent != null) {
-            if (intent.hasExtra(SnapshotsClient.EXTRA_SNAPSHOT_METADATA)) {
+            if (requestCode == RC_SHOW_PLAYER_SEARCH) {
+                if (resultCode == Activity.RESULT_OK) {
+                    ArrayList<Player> snapshotMetadata =
+                            intent.getParcelableArrayListExtra(PlayersClient.EXTRA_PLAYER_SEARCH_RESULTS);
+                    Player player = snapshotMetadata.get(0);
+                    self.showAnotherPlayersProfileAction(player.getPlayerId(), null);
+                }
+            }
+            else if (requestCode == SHOW_SHARING_FRIENDS_CONSENT) {
+                if (resultCode == Activity.RESULT_OK) {
+                    Log.e(TAG, "Load friends: OK");
+                    self.emitWindowEvent(EVENT_FRIENDS_LIST_REQUEST_SUCCESSFUL);
+                } else {
+                    Log.e(TAG, "Load friends: No access");
+                }
+            }
+            else if (intent.hasExtra(SnapshotsClient.EXTRA_SNAPSHOT_METADATA)) {
                 // Load a snapshot.
                 SnapshotMetadata snapshotMetadata =
                         intent.getParcelableExtra(SnapshotsClient.EXTRA_SNAPSHOT_METADATA);
@@ -218,13 +268,6 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
             } else if (intent.hasExtra(SnapshotsClient.EXTRA_SNAPSHOT_NEW)) {
                 // Create a new snapshot named with a unique string
                 self.emitWindowEvent(EVENT_SAVE_GAME_REQUEST);
-            } else if (requestCode == SHOW_SHARING_FRIENDS_CONSENT) {
-                if (resultCode == Activity.RESULT_OK) {
-                    Log.e(TAG, "Load friends: OK");
-                    self.emitWindowEvent(EVENT_FRIENDS_LIST_REQUEST_SUCCESSFUL);
-                } else {
-                    Log.e(TAG, "Load friends: No access");
-                }
             }
         }
     }
@@ -286,19 +329,50 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
     }
 
     /**
+     * Reveal achievement for current user
+     */
+    private void revealAchievementAction(String achievementId, final CallbackContext callbackContext) {
+        cordova.getActivity().runOnUiThread(new Runnable() {
+            public void run() {
+                PlayGames.getAchievementsClient(cordova.getActivity()).reveal(achievementId);
+                callbackContext.success();
+            }
+        });
+    }
+
+    /**
      * Show achievements
      */
     private void showAchievementsAction(final CallbackContext callbackContext) {
+        GooglePlayGamesPlugin self = this;
         cordova.getActivity().runOnUiThread(new Runnable() {
             public void run() {
-                PlayGames.getAchievementsClient(cordova.getActivity())
-                        .getAchievementsIntent()
-                        .addOnSuccessListener(new OnSuccessListener<Intent>() {
-                            @Override
-                            public void onSuccess(Intent intent) {
-                                cordova.getActivity().startActivityForResult(intent, RC_ACHIEVEMENT_UI);
-                            }
-                        });
+                AchievementsClient client = PlayGames.getAchievementsClient(cordova.getActivity());
+                client
+                    .load(true)
+                    .addOnSuccessListener((data) -> {
+                       client
+                           .getAchievementsIntent()
+                           .addOnSuccessListener(new OnSuccessListener<Intent>() {
+                               @Override
+                               public void onSuccess(Intent intent) {
+                                   cordova.setActivityResultCallback(self);
+                                   cordova.getActivity().startActivityForResult(intent, RC_ACHIEVEMENT_UI);
+                                   callbackContext.success();
+                               }
+                           });
+                    });
+            }
+        });
+    }
+
+    /**
+     * Set steps in achievement
+     */
+    private void setStepsInAchievementAction(String achievementId, int count, final CallbackContext callbackContext) {
+        cordova.getActivity().runOnUiThread(new Runnable() {
+            public void run() {
+                PlayGames.getAchievementsClient(cordova.getActivity()).setSteps(achievementId, count);
                 callbackContext.success();
             }
         });
@@ -346,6 +420,7 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
      * Show leaderboard
      */
     private void showLeaderboardAction(String leaderboardId, final CallbackContext callbackContext) {
+        GooglePlayGamesPlugin self = this;
         cordova.getActivity().runOnUiThread(new Runnable() {
             public void run() {
                 PlayGames.getLeaderboardsClient(cordova.getActivity())
@@ -353,7 +428,40 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
                         .addOnSuccessListener(new OnSuccessListener<Intent>() {
                             @Override
                             public void onSuccess(Intent intent) {
+                                cordova.setActivityResultCallback(self);
                                 cordova.getActivity().startActivityForResult(intent, RC_LEADERBOARD_UI);
+                                callbackContext.success();
+                            }
+                        });
+            }
+        });
+    }
+
+    /**
+     * Show all leaderboards
+     */
+    private void showAllLeaderboardsAction(final CallbackContext callbackContext) {
+        GooglePlayGamesPlugin self = this;
+        cordova.getActivity().runOnUiThread(new Runnable() {
+            public void run() {
+                LeaderboardsClient client = PlayGames.getLeaderboardsClient(cordova.getActivity());
+                client
+                        .loadLeaderboardMetadata(true)
+                        .addOnSuccessListener(new OnSuccessListener<AnnotatedData<LeaderboardBuffer>>() {
+                            @Override
+                            public void onSuccess(AnnotatedData<LeaderboardBuffer> data) {
+                                client.getAllLeaderboardsIntent()
+                                        .addOnSuccessListener(new OnSuccessListener<Intent>() {
+                                            @Override
+                                            public void onSuccess(Intent intent) {
+                                                cordova.setActivityResultCallback(self);
+                                                cordova.getActivity().startActivityForResult(intent, RC_LEADERBOARDS_UI);
+                                                if (data.get() != null) {
+                                                    data.get().release();
+                                                }
+                                                callbackContext.success();
+                                            }
+                                        });
                             }
                         });
             }
@@ -488,6 +596,9 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
         });
     }
 
+    /**
+     * Get friends list
+     */
     private void getFriendsListAction(final CallbackContext callbackContext) {
         GooglePlayGamesPlugin self = this;
         cordova.getActivity().runOnUiThread(new Runnable() {
@@ -620,7 +731,11 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
         });
     }
 
-    private void showAnotherPlayersProfileAction(String playerId, final CallbackContext callbackContext) {
+    /**
+     * Show another player profile, used also for player search
+     */
+    private void showAnotherPlayersProfileAction(String playerId, @Nullable final CallbackContext callbackContext) {
+        GooglePlayGamesPlugin self = this;
         cordova.getActivity().runOnUiThread(new Runnable() {
             public void run() {
                 PlayGames.getPlayersClient(cordova.getActivity())
@@ -628,13 +743,105 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
                     .addOnSuccessListener(new OnSuccessListener<Intent>() {
                         @Override
                         public void onSuccess(Intent  intent) {
+                            cordova.setActivityResultCallback(self);
                             cordova.getActivity().startActivityForResult(intent, RC_SHOW_PROFILE);
-                            callbackContext.success();
+                            if (callbackContext != null) {
+                                callbackContext.success();
+                            }
                         }});
             }
         });
     }
 
+    /**
+     * Show player search default window
+     */
+    private void showPlayerSearchAction(final CallbackContext callbackContext) {
+        GooglePlayGamesPlugin self = this;
+        cordova.getActivity().runOnUiThread(new Runnable() {
+            public void run() {
+                PlayGames.getPlayersClient(cordova.getActivity())
+                        .getPlayerSearchIntent()
+                        .addOnSuccessListener(new OnSuccessListener<Intent>() {
+                            @Override
+                            public void onSuccess(Intent  intent) {
+                                cordova.setActivityResultCallback(self);
+                                cordova.getActivity().startActivityForResult(intent, RC_SHOW_PLAYER_SEARCH);
+                                callbackContext.success();
+                            }});
+            }
+        });
+    }
+
+    private void getPlayerAction(String id, Boolean forceReload, final CallbackContext callbackContext) {
+        cordova.getActivity().runOnUiThread(new Runnable() {
+            public void run() {
+                PlayGames.getPlayersClient(cordova.getActivity())
+                    .loadPlayer(id, forceReload)
+                    .addOnSuccessListener((data) -> {
+                        Player player = data.get();
+                        JSONObject result = new JSONObject();
+                        if (player == null) {
+                            callbackContext.success(result);
+                            return;
+                        }
+                        try {
+                            result.put("id", player.getPlayerId());
+                            result.put("name", player.getDisplayName());
+                            result.put("title", player.getTitle());
+                            result.put("retrievedTimestamp", player.getRetrievedTimestamp());
+                            if (player.getBannerImageLandscapeUri() != null) {
+                                result.put("bannerImageLandscapeUri", player.getBannerImageLandscapeUri().toString());
+                            }
+                            if (player.getBannerImagePortraitUri() != null) {
+                                result.put("bannerImagePortraitUri", player.getBannerImagePortraitUri().toString());
+                            }
+                            if (player.hasIconImage()) {
+                                result.put("iconImageUri", player.getIconImageUri().toString());
+                            }
+                            if (player.hasHiResImage()) {
+                                result.put("hiResImageUri", player.getHiResImageUri().toString());
+                            }
+                            if (player.getLevelInfo() != null) {
+                                JSONObject levelInfo = new JSONObject();
+                                levelInfo.put("currentLevel", player.getLevelInfo().getCurrentLevel().getLevelNumber());
+                                levelInfo.put("maxXp", player.getLevelInfo().getCurrentLevel().getMaxXp());
+                                levelInfo.put("minXp", player.getLevelInfo().getCurrentLevel().getMinXp());
+                                levelInfo.put("hashCode", player.getLevelInfo().getCurrentLevel().hashCode());
+                                result.put("levelInfo", levelInfo);
+                            }
+
+                            if (player.hasIconImage()) {
+                                ImageManager mgr = ImageManager.create(cordova.getContext());
+                                mgr.loadImage((uri, drawable, isRequestedDrawable) -> {
+                                    if (isRequestedDrawable) {
+                                        Bitmap bitmap = ((BitmapDrawable) drawable).getBitmap();
+                                        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
+                                        byte[] byteArray = byteArrayOutputStream.toByteArray();
+                                        String encoded = Base64.encodeToString(byteArray, Base64.DEFAULT);
+                                        try {
+                                            result.put("iconImageBase64", "data:image/png;base64, " + encoded);
+                                            callbackContext.success(result);
+                                        } catch (Exception e) {
+                                            Log.e(TAG, "Error while getting base64 for user from friend list.");
+                                        }
+                                    }
+                                }, Objects.requireNonNull(player.getIconImageUri()));
+                            } else {
+                                callbackContext.success(result);
+                            }
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error while getting player.");
+                        }
+                    });
+            }
+        });
+    }
+
+    /**
+     * Returns current player stats
+     */
     private void getCurrentPlayerStatsAction(final CallbackContext callbackContext) {
         PlayGames.getPlayerStatsClient(cordova.getActivity())
             .loadPlayerStats(true)
@@ -676,6 +883,9 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
             });
     }
 
+    /**
+     * Get all events (user custom stats)
+     */
     private void getAllEventsAction(final CallbackContext callbackContext) {
         GooglePlayGamesPlugin self = this;
         cordova.getActivity().runOnUiThread(new Runnable() {
@@ -780,6 +990,9 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
         });
     }
 
+    /**
+     * Get current user event
+     */
     private void getEventAction(String id, final CallbackContext callbackContext) {
         GooglePlayGamesPlugin self = this;
         cordova.getActivity().runOnUiThread(new Runnable() {
@@ -870,6 +1083,9 @@ public class GooglePlayGamesPlugin extends CordovaPlugin {
         });
     }
 
+    /**
+     * Set value for user event
+     */
     private void incrementEventAction(String id, int amount, final CallbackContext callbackContext) {
         cordova.getActivity().runOnUiThread(new Runnable() {
             public void run() {
